@@ -16,6 +16,20 @@
              :group.id "shovel-test-0",
              :auto.commit.enable "true"})
 
+
+(def c
+  "channel for recieving kafka messages on the specific topic"
+  (async/chan))
+(def counter (ref 0))
+
+(defn showThreadId []
+  "Getting thread-id of this processing"
+  (.getId (Thread/currentThread)))
+
+(defn countup []
+  "reset the counter"
+  (dosync (alter counter inc)))
+
 (defn message-to-vec2
   "returns a hashmap of all of the message fields"
   [^kafka.message.MessageAndMetadata message]
@@ -28,7 +42,6 @@
 (defn default-iterator2
   "processing all streams in a thread and printing the message field for each message"
   [^java.util.ArrayList streams]
-  (let [c (async/chan)]
     ;; create a thread for each stream
     (doseq
       [^kafka.consumer.KafkaStream stream streams]
@@ -36,10 +49,21 @@
        (async/>!! c
                   (doseq
                     [^kafka.message.MessageAndMetadata message stream]
-                    (println (:message (message-to-vec2 message)))))))
+                    (let[cnt (countup)]
+                      (println (:message (message-to-vec2 message)) cnt)
+                    )))))
     ;; read the channel forever
     (while true
-      (async/<!! c))))
+      (async/<!! c)))
+
+(defn set-interval [callback ms]
+  "common function for periodical function call"
+  (future (while true (do (Thread/sleep ms) (callback)))))
+
+;;kicked immediately..
+(def pjob
+  "future for resetting counter"
+  (set-interval #(dosync (ref-set counter 0)) 3000))
 
 (defn -main
   "The application's main function"
@@ -48,4 +72,7 @@
     (sh-consumer/message-streams
       (sh-consumer/consumer-connector config)
       (:topic config)
-      (int (read-string (:thread.pool.size config))))))
+      (int (read-string (:thread.pool.size config)))))
+
+  ;(future-cancel pjob) ; to cancel periodical reset function call
+  )
