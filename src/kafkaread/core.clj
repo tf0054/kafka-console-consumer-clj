@@ -13,8 +13,6 @@
              :thread.pool.size "4",
              :auto.commit.enable "true"})
 
-(def counter (ref 0))
-
 (defn showThreadId []
   "Getting thread-id of this processing"
   (.getId (Thread/currentThread)))
@@ -36,7 +34,6 @@
   "processing all streams in a thread and printing the message field for each message"
   [^java.util.ArrayList streams x]
   ;; create a thread for each stream
-  (println "main: " (showThreadId))
   (doseq
     [^kafka.consumer.KafkaStream stream streams]
     (async/thread
@@ -46,32 +43,43 @@
          (println (:message (message-to-vec2 message)) cnt)
     (println "sub: " (showThreadId))
          ))))
-  x
+;  x
   )
 
 (defn set-interval [callback ms]
   "common function for periodical function call"
   (future (while true (do (Thread/sleep ms) (callback)))))
 
-;;kicked immediately..
-(def pjob
-  "future for resetting counter"
-  (set-interval #(dosync (ref-set counter 0)) 3000))
+(defn resetCounters [x]
+  (doall (map #(dosync (ref-set % 0)) x)))
+
+(defn showCounters [x]
+  (doall (map #(println "deref: " (deref %)) x)))
 
 (defn -main
   "The application's main function"
   [& args]
-  (doall
-   (pmap
-    #((let [strTopic %
-          cfg (conj config {:group.id (str "shovel-" strTopic) :topic strTopic})]
-      (default-iterator2
-        (sh-consumer/message-streams
-         (sh-consumer/consumer-connector cfg)
-         (:topic cfg)
-         (int (read-string (:thread.pool.size cfg))))
-        counter)))
-    ["test_input_urls" "gungnir_track.544a65950cf28a00f105fb79.queryTuple"]))
+  (println "main: " (showThreadId))
+  (let [objRefs
+    (doall
+     (pmap
+      #(let [counter (ref 0)
+              strTopic %
+              cfg (conj config {:group.id (str "shovel-" strTopic) :topic strTopic})]
+         (default-iterator2
+           (sh-consumer/message-streams
+            (sh-consumer/consumer-connector cfg)
+            (:topic cfg)
+            (int (read-string (:thread.pool.size cfg))))
+           counter)
+        counter)
+      ["test_input_urls" "gungnir_track.544a65950cf28a00f105fb79.queryTuple"]))]
+    ; Timers
+    (set-interval #(showCounters objRefs) 1000)
+    (set-interval #(resetCounters objRefs) 3000)
+    )
+
+    ;(println "class: " (doall (class objRefs))))
   (println "main_ended?")
   ;(future-cancel pjob) ; to cancel periodical reset function call
   )
