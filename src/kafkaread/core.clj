@@ -4,16 +4,13 @@
             [clojure.core.async :as async]))
 
 (def kafkaserver "internal-vagrant.genn.ai:2181")
-(def topicname "test_input_urls")
 
 (def config {:auto.commit.interval.ms "1000",
              :zookeeper.sync.time.ms "1000",
              :zookeeper.session.timeout.ms "1000",
              :auto.offset.reset "largest",
-             :topic topicname,
              :zookeeper.connect kafkaserver,
              :thread.pool.size "4",
-             :group.id "shovel-test-0",
              :auto.commit.enable "true"})
 
 (def counter (ref 0))
@@ -22,9 +19,9 @@
   "Getting thread-id of this processing"
   (.getId (Thread/currentThread)))
 
-(defn countup []
-  "reset the counter"
-  (dosync (alter counter inc)))
+(defn countup [x]
+  "increment counter"
+  (dosync (alter x inc)))
 
 (defn message-to-vec2
   "returns a hashmap of all of the message fields"
@@ -37,7 +34,7 @@
 
 (defn default-iterator2
   "processing all streams in a thread and printing the message field for each message"
-  [^java.util.ArrayList streams]
+  [^java.util.ArrayList streams x]
   ;; create a thread for each stream
   (println "main: " (showThreadId))
   (doseq
@@ -45,11 +42,11 @@
     (async/thread
      (doseq
        [^kafka.message.MessageAndMetadata message stream]
-       (let[cnt (countup)]
+       (let[cnt (countup x)]
          (println (:message (message-to-vec2 message)) cnt)
     (println "sub: " (showThreadId))
          ))))
-  (println "main_blocked?")
+  x
   )
 
 (defn set-interval [callback ms]
@@ -64,11 +61,17 @@
 (defn -main
   "The application's main function"
   [& args]
-  (default-iterator2
-    (sh-consumer/message-streams
-      (sh-consumer/consumer-connector config)
-      (:topic config)
-      (int (read-string (:thread.pool.size config)))))
+  (doall
+   (pmap
+    #((let [strTopic %
+          cfg (conj config {:group.id (str "shovel-" strTopic) :topic strTopic})]
+      (default-iterator2
+        (sh-consumer/message-streams
+         (sh-consumer/consumer-connector cfg)
+         (:topic cfg)
+         (int (read-string (:thread.pool.size cfg))))
+        counter)))
+    ["test_input_urls" "gungnir_track.544a65950cf28a00f105fb79.queryTuple"]))
   (println "main_ended?")
   ;(future-cancel pjob) ; to cancel periodical reset function call
   )
