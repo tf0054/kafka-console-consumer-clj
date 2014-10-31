@@ -36,14 +36,12 @@
   ;; create a thread for each stream
   (doseq
     [^kafka.consumer.KafkaStream stream streams]
-    (async/thread
+    (async/thread ; cannot be replaced (.start(Thread +++)) ?
      (doseq
        [^kafka.message.MessageAndMetadata message stream]
        (let[cnt (countup x)]
-         (println (:message (message-to-vec2 message)) cnt)
-    (println "sub: " (showThreadId))
-         ))))
-  )
+         (println (:message (message-to-vec2 message)) cnt "(" (showThreadId) ")")
+         )))))
 
 (defn runConsumer
   "The application's main function"
@@ -56,4 +54,4 @@
             (:topic cfg)
             (int (read-string (:thread.pool.size cfg))))
            counter)
-        counter))
+    counter))
