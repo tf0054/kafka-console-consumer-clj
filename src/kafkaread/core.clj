@@ -17,7 +17,8 @@
   (doall (map #(dosync (ref-set % 0)) x)))
 
 (defn showCounters [x]
-  (doall (map #(println "deref: " (deref %)) x)))
+  (doall (map #(print (str (deref %) " ")) x))
+  (println ""))
 
 (defn -main
   "The application's main function"
