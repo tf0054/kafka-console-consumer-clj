@@ -16,10 +16,6 @@
              :group.id "shovel-test-0",
              :auto.commit.enable "true"})
 
-
-(def c
-  "channel for recieving kafka messages on the specific topic"
-  (async/chan))
 (def counter (ref 0))
 
 (defn showThreadId []
@@ -42,19 +38,19 @@
 (defn default-iterator2
   "processing all streams in a thread and printing the message field for each message"
   [^java.util.ArrayList streams]
-    ;; create a thread for each stream
-    (doseq
-      [^kafka.consumer.KafkaStream stream streams]
-      (async/thread
-       (async/>!! c
-                  (doseq
-                    [^kafka.message.MessageAndMetadata message stream]
-                    (let[cnt (countup)]
-                      (println (:message (message-to-vec2 message)) cnt)
-                    )))))
-    ;; read the channel forever
-    (while true
-      (async/<!! c)))
+  ;; create a thread for each stream
+  (println "main: " (showThreadId))
+  (doseq
+    [^kafka.consumer.KafkaStream stream streams]
+    (async/thread
+     (doseq
+       [^kafka.message.MessageAndMetadata message stream]
+       (let[cnt (countup)]
+         (println (:message (message-to-vec2 message)) cnt)
+    (println "sub: " (showThreadId))
+         ))))
+  (println "main_blocked?")
+  )
 
 (defn set-interval [callback ms]
   "common function for periodical function call"
@@ -73,6 +69,6 @@
       (sh-consumer/consumer-connector config)
       (:topic config)
       (int (read-string (:thread.pool.size config)))))
-
+  (println "main_ended?")
   ;(future-cancel pjob) ; to cancel periodical reset function call
   )
