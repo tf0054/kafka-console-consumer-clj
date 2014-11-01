@@ -3,13 +3,13 @@
   (:require [shovel.consumer :as sh-consumer]
             [clojure.core.async :as async]))
 
-(def kafkaserver "internal-vagrant.genn.ai:2181")
+;(def zkserver "internal-vagrant.genn.ai:2181")
 
 (def config {:auto.commit.interval.ms "1000",
              :zookeeper.sync.time.ms "1000",
              :zookeeper.session.timeout.ms "1000",
              :auto.offset.reset "largest",
-             :zookeeper.connect kafkaserver,
+;             :zookeeper.connect zkserver,
              :thread.pool.size "4",
              :auto.commit.enable "true"})
 
@@ -45,9 +45,11 @@
 
 (defn runConsumer
   "The application's main function"
-  [strTopic]
+  [zkserver strTopic]
   (let [counter (ref 0)
-        cfg (conj config {:group.id (str "shovel-" strTopic) :topic strTopic})]
+        cfg (conj config {:zookeeper.connect zkserver
+                          :group.id (str "shovel-" strTopic)
+                          :topic strTopic})]
          (default-iterator2
            (sh-consumer/message-streams
             (sh-consumer/consumer-connector cfg)

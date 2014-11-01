@@ -8,14 +8,27 @@
    [clojure.core.async :as async]
    [kafkaread.kafka :as kafka]))
 
+(defn cli-parse-uiserver [x]
+  (zipmap [:host :port] (string/split x #"\:")))
+
+(defn cli-parse-topic [x]
+  (string/split x #"\,"))
+
 (def cli-options
-  ;; 引数が必要なオプション
-   [["-s" nil "TCP sending mode"
-    :id :send
-    :default "localhost"]
-   ;; デフォルトがnilのbooleanオプション
-   ;["-h" nil "Show this help msg"]])
-    ["-h" "--help" "Show this help msg"]])
+  ;definitions of option
+  ;long option should have an exampleo in it....
+  [["-s" "--uiserver localhost:2181" "TCP sending mode"
+    :id :uiserver
+    :default nil
+    :parse-fn cli-parse-uiserver]
+   ["-z" "--zkserver localhost:6666" "ZK server address"
+    :id :zkserver
+    :default "internal-vagrant.genn.ai:2181"]
+   ["-t" "--topic A,B, ..." "Topics you want to count msgs"
+    :id :topics
+    :default nil
+    :parse-fn cli-parse-topic]
+   ["-h" "--help" "Show this help msg"]])
 
 (defn exit [status msg]
   (println msg)
@@ -59,16 +72,19 @@
   (println "main: " (showThreadId))
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     ; Help
+    (pprint options)
+    (System/exit 1)
     (if (:help options)
       (exit 0 (usage summary)))
     ; Main
-    (let [objRefs (doall (pmap #(kafka/runConsumer %)
-                                 ["test_input_urls" "gungnir_track.544a65950cf28a00f105fb79.queryTuple"]))]
+    (let [objRefs (doall (pmap #(kafka/runConsumer (:zkserver options) %)
+                                 ["test_input_urls" "gungnir_track.544dfc0a0cf2c286dba0cedd.queryTuple"]))]
       ; Timer1
       (set-interval #(resetCounters objRefs) 10000)
       ; Timer2
       (if (= (count arguments) 1) (do
-        (let [c @(tcp/client {:host "localhost", :port 6666})]
+        (let [c @(tcp/client {:host (:host (:uiserver options))
+                              :port (:port (:uiserver options))})]
           (set-interval #(sendCounters c objRefs) 1000)))
         (set-interval #(showCounters objRefs) 1000))))
   (println "main_ended?"))
