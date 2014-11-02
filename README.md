@@ -4,7 +4,9 @@ A Clojure library designed to ... well, that part is up to you.
 
 ## Usage
 
-FIXME
+```
+~/bin/lein run -- -t test_input_urls,gungnir_track.545562980cf2827387ebbfe6.queryTuple -u localhost:6666
+```
 
 ## License
 
