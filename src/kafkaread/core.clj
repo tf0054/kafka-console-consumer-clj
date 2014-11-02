@@ -17,17 +17,20 @@
 (def cli-options
   ;definitions of option
   ;long option should have an exampleo in it....
-  [["-s" "--uiserver localhost:2181" "TCP sending mode"
+  [["-u" "--uiserver localhost:6666" "Graphit server address"
     :id :uiserver
     :default nil
     :parse-fn cli-parse-uiserver]
-   ["-z" "--zkserver localhost:6666" "ZK server address"
+   ["-z" "--zkserver localhost:2181" "ZK server address"
     :id :zkserver
     :default "internal-vagrant.genn.ai:2181"]
    ["-t" "--topic A,B, ..." "Topics you want to count msgs"
     :id :topics
     :default nil
     :parse-fn cli-parse-topic]
+   ["-r" "--reset 1000" "Reset per millsec (non-sending mode only)"
+    :id :resetmil
+    :default 1000]
    ["-h" "--help" "Show this help msg"]])
 
 (defn exit [status msg]
@@ -58,13 +61,19 @@
 
 (defn showCounters [x]
   (let [refData (ref "")]
-    (doall (map #(dosync (ref-set refData (str @refData "\n" "Graph" % "\t" % "\t" (deref %2)))) (range) x))
-    (println @refData)
-    @refData))
+;    (doall (map #(dosync (ref-set refData (str @refData "\n" "Graph" % "\t" % "\t" (deref %2)))) (range) x))
+     (doall (map #(dosync (ref-set refData (str @refData "\n" "Graph0" "\t" % "\t" (deref %2)))) ["out" "in"] x))
+    ;(println @refData)
+    ;@refData))
+    (let [strData @refData]
+      (doall (map #(dosync (ref-set % 0)) x))
+      (println strData)
+      strData)))
 
 (defn sendCounters [c x]
   (let [strData (showCounters x)]
-    (s/put! c strData)))
+    (s/put! c strData)
+    (doall (map #(dosync (ref-set % 0)) x))))
 
 (defn -main
   "The application's main function"
@@ -72,19 +81,23 @@
   (println "main: " (showThreadId))
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     ; Help
-    (pprint options)
-    (System/exit 1)
     (if (:help options)
       (exit 0 (usage summary)))
+    (if (nil? (:topics options))
+      (do (println "Topic(s) have to be defined.")
+        (exit 0 (usage summary)))
+      (println "Topics: " (string/join ", " (:topics options))))
     ; Main
     (let [objRefs (doall (pmap #(kafka/runConsumer (:zkserver options) %)
-                                 ["test_input_urls" "gungnir_track.544dfc0a0cf2c286dba0cedd.queryTuple"]))]
+                               (:topics options)))]
       ; Timer1
-      (set-interval #(resetCounters objRefs) 10000)
+      ;(set-interval #(resetCounters objRefs) (:resetmil options))
       ; Timer2
-      (if (= (count arguments) 1) (do
-        (let [c @(tcp/client {:host (:host (:uiserver options))
-                              :port (:port (:uiserver options))})]
+      (if (not (nil? (:uiserver options))) (do
+        (println "Graphit: " (:uiserver options))
+        (let [c @(tcp/client {:host "localhost", :port 6666})]
+                  ;{:host (:host (:uiserver options))
+                  ;            :port (:port (:uiserver options))})]
           (set-interval #(sendCounters c objRefs) 1000)))
         (set-interval #(showCounters objRefs) 1000))))
   (println "main_ended?"))

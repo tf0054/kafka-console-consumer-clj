@@ -40,7 +40,7 @@
      (doseq
        [^kafka.message.MessageAndMetadata message stream]
        (let[cnt (countup x)]
-         (println (:message (message-to-vec2 message)) cnt "(" (showThreadId) ")")
+         ;(println (:message (message-to-vec2 message)) cnt "(" (showThreadId) ")")
          )))))
 
 (defn runConsumer
