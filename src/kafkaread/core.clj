@@ -9,7 +9,8 @@
    [kafkaread.kafka :as kafka]))
 
 (defn cli-parse-uiserver [x]
-  (zipmap [:host :port] (string/split x #"\:")))
+  (let [hashStr (zipmap [:host :port] (string/split x #"\:"))]
+    (assoc hashStr :port (Integer. (:port hashStr)))))
 
 (defn cli-parse-topic [x]
   (string/split x #"\,"))
@@ -17,18 +18,18 @@
 (def cli-options
   ;definitions of option
   ;long option should have an exampleo in it....
-  [["-u" "--uiserver localhost:6666" "Graphit server address"
+  [["-t" "--topic A,B, ..." "REQUIRED: Topics you want to count msgs"
+    :id :topics
+    :default nil
+    :parse-fn cli-parse-topic]
+   ["-u" "--uiserver localhost:6666" "Graphit server address if you want to send data"
     :id :uiserver
     :default nil
     :parse-fn cli-parse-uiserver]
    ["-z" "--zkserver localhost:2181" "ZK server address"
     :id :zkserver
     :default "internal-vagrant.genn.ai:2181"]
-   ["-t" "--topic A,B, ..." "Topics you want to count msgs"
-    :id :topics
-    :default nil
-    :parse-fn cli-parse-topic]
-   ["-r" "--reset 1000" "Reset per millsec (non-sending mode only)"
+   ["-r" "--reset 1000" "Reset per millsec (with Graphit only)"
     :id :resetmil
     :default 1000]
    ["-h" "--help" "Show this help msg"]])
@@ -84,7 +85,7 @@
     (if (:help options)
       (exit 0 (usage summary)))
     (if (nil? (:topics options))
-      (do (println "Topic(s) have to be defined.")
+      (do (println "Topic(s) have to be defined using \"-t\" option")
         (exit 0 (usage summary)))
       (println "Topics: " (string/join ", " (:topics options))))
     ; Main
@@ -95,9 +96,9 @@
       ; Timer2
       (if (not (nil? (:uiserver options))) (do
         (println "Graphit: " (:uiserver options))
-        (let [c @(tcp/client {:host "localhost", :port 6666})]
-                  ;{:host (:host (:uiserver options))
-                  ;            :port (:port (:uiserver options))})]
+        (let [c @(tcp/client ;{:host "localhost", :port 6666})]
+                  {:host (:host (:uiserver options))
+                          :port (:port (:uiserver options))})]
           (set-interval #(sendCounters c objRefs) 1000)))
         (set-interval #(showCounters objRefs) 1000))))
   (println "main_ended?"))
